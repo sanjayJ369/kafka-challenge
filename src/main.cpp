@@ -54,10 +54,13 @@ int main(int argc, char* argv[]) {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     std::cerr << "Logs from your program will appear here!\n";
     
-    // Uncomment this block to pass the first stage
-    // 
+
     int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_addr_len);
     std::cout << "Client connected\n";
+    int message_size = htonl(4); 
+    int corelation_id = htonl(7); 
+    write(client_fd, &message_size, 4);
+    write(client_fd, &corelation_id, 4); 
     close(client_fd);
 
     close(server_fd);
