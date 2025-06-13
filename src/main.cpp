@@ -8,6 +8,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+const int supported_versions[] = {0, 1, 2, 3, 4}; 
+const int versions = 5;
+const int16_t ver_err_code = 35;
+
 int main(int argc, char* argv[]) {
     // Disable output buffering
     std::cout << std::unitbuf;
@@ -57,16 +61,37 @@ int main(int argc, char* argv[]) {
 
     int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_addr_len);
     std::cout << "Client connected\n";
-    int32_t message_size, correlation_id; 
-    read(client_fd, &message_size, 4); 
-    message_size = ntohl(message_size);
+    int32_t req_message_size, correlation_id, res_message_size; 
+    int16_t request_api_key, request_api_version, error;
+    error = htons(0);
+    // read message size
+    read(client_fd, &req_message_size, 4); 
+    req_message_size = ntohl(req_message_size);
 
-    char *buffer = (char*)calloc(message_size, sizeof(char));
-    read(client_fd, buffer, message_size); 
+    // read message
+    char *buffer = (char*)calloc(req_message_size, sizeof(char));
+    read(client_fd, buffer, req_message_size); 
+
+    // parsing header
     memcpy(&correlation_id, buffer+4, sizeof(int32_t));
+    memcpy(&request_api_version, buffer+2, sizeof(int16_t)); 
 
-    write(client_fd, &message_size, 4);
+
+    // check if requested version is supported
+    bool ver_err = true;
+    for (int i = 0; i < versions; i++) {
+        if (ntohs(request_api_version) == supported_versions[i]) {
+            ver_err = false;
+        }
+    }
+    if (ver_err) {
+        error = htons(ver_err_code);
+    }
+
+    res_message_size = htonl(6);
+    write(client_fd, &res_message_size, 4);
     write(client_fd, &correlation_id, 4); 
+    write(client_fd, &error, 2); 
     close(client_fd);
 
     close(server_fd);
