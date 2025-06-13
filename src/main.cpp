@@ -7,10 +7,26 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include "utils.hpp"
 
 const int supported_versions[] = {0, 1, 2, 3, 4}; 
 const int versions = 5;
 const int16_t ver_err_code = 35;
+
+struct APIVersion {
+    uint16_t api_key; 
+    uint16_t max_ver; 
+    uint16_t min_ver;
+}; 
+
+APIVersion api_versions_api = {
+    15,
+    4,
+    0,
+}; 
+
+APIVersion api_versions_apis[] = {api_versions_api}; 
+const int api_versions_apis_count = 1;
 
 int main(int argc, char* argv[]) {
     // Disable output buffering
@@ -84,14 +100,51 @@ int main(int argc, char* argv[]) {
             ver_err = false;
         }
     }
+
+    // construct compace array 
+    uint32_t comp_arr_len = 7 * api_versions_apis_count + (api_versions_apis_count  - 1);
+    char *comp_arr = (char *)calloc(comp_arr_len, sizeof(char));
+    comp_arr[0] = api_versions_apis_count + 1;
+    if (!ver_err) {
+        for (int i = 0; i < api_versions_apis_count; i++) {
+            APIVersion ver = api_versions_apis[i];
+            // array length 1B 
+            std :: cout << "\nadded new api";
+            uint8_t start = i * 7, buffer_tag = 0;
+            uint8_t arr_len = 8; 
+            uint16_t api_key = htons(ver.api_key); 
+            uint16_t min_support = htons(ver.min_ver);
+            uint16_t max_support = htons(ver.max_ver); 
+    
+            memcpy(comp_arr + start + 1, &api_key, 2);
+            memcpy(comp_arr + start + 3, &min_support, 2); 
+            memcpy(comp_arr + start + 5, &max_support, 2);
+            if (i != comp_arr_len - 1) {
+                memcpy(comp_arr + start + 7, &buffer_tag, 1); 
+            }
+        }
+    }
+    printBufferAsHex(comp_arr, comp_arr_len);
     if (ver_err) {
         error = htons(ver_err_code);
+        res_message_size = 6; 
+    } else {
+        res_message_size = 6 + comp_arr_len + 1 + 4 + 1;
     }
 
-    res_message_size = htonl(6);
+    uint8_t tagbuffer = 0; 
+    uint32_t throttle = 0; 
+
     write(client_fd, &res_message_size, 4);
     write(client_fd, &correlation_id, 4); 
     write(client_fd, &error, 2); 
+    if (!ver_err) {
+        write(client_fd, comp_arr, comp_arr_len);
+        std :: cout << "\nwrote compact array";
+        write(client_fd, &tagbuffer, 1); 
+        write(client_fd, &throttle, 4); 
+        write(client_fd, &tagbuffer, 1); 
+    }
     close(client_fd);
 
     close(server_fd);
