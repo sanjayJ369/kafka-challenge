@@ -57,10 +57,16 @@ int main(int argc, char* argv[]) {
 
     int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_addr_len);
     std::cout << "Client connected\n";
-    int message_size = htonl(4); 
-    int corelation_id = htonl(7); 
+    int32_t message_size, correlation_id; 
+    read(client_fd, &message_size, 4); 
+    message_size = ntohl(message_size);
+
+    char *buffer = (char*)calloc(message_size, sizeof(char));
+    read(client_fd, buffer, message_size); 
+    memcpy(&correlation_id, buffer+4, sizeof(int32_t));
+
     write(client_fd, &message_size, 4);
-    write(client_fd, &corelation_id, 4); 
+    write(client_fd, &correlation_id, 4); 
     close(client_fd);
 
     close(server_fd);
