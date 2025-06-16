@@ -20,7 +20,7 @@ struct APIVersion {
 }; 
 
 APIVersion api_versions_api = {
-    15,
+    18,
     4,
     0,
 }; 
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     } else {
         res_message_size = 6 + comp_arr_len + 1 + 4 + 1;
     }
-
+    res_message_size = htonl(res_message_size);
     uint8_t tagbuffer = 0; 
     uint32_t throttle = 0; 
 
