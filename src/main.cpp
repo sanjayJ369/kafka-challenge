@@ -8,11 +8,21 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include "utils.hpp"
+#include <thread>
+#include <atomic>
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 void handle_sock(int client_fd);
+void handle_conn(int client_fd, std::atomic<int>& counter);
+void handle_clients(int max_client_count, int server_fd, std::atomic<int>& counter);
+
 const int supported_versions[] = {0, 1, 2, 3, 4};
 const int versions = 5;
 const int16_t ver_err_code = 35;
+const auto wait_time = 3000ms; 
+std::atomic<int> thread_count{0}; 
 
 struct APIVersion
 {
@@ -75,18 +85,40 @@ int main(int argc, char *argv[])
 
     std::cout << "Waiting for a client to connect...\n";
 
-    struct sockaddr_in client_addr{};
-    socklen_t client_addr_len = sizeof(client_addr);
+    std::thread t(handle_clients,connection_backlog, server_fd, std::ref(thread_count));
+    t.detach(); 
 
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    std::cerr << "Logs from your program will appear here!\n";
+    std::this_thread::sleep_for(wait_time); 
 
-    int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr), &client_addr_len);
-    std::cout << "Client connected\n";
-    handle_sock(client_fd);
+    while (thread_count.load() != 0) {
+        std::this_thread::sleep_for(1000ms);
+    }
 
     close(server_fd);
     return 0;
+}
+
+void handle_clients(int max_client_count, int server_fd, std::atomic<int>& counter)
+{
+    
+    for (int i = 0; i < max_client_count; i++)
+    {
+        struct sockaddr_in client_addr{};
+        socklen_t client_addr_len = sizeof(client_addr);
+        int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr), &client_addr_len);
+        std::cout << "Client connected\n";
+        std::thread t(handle_conn, client_fd, std::ref(counter));
+        t.detach();
+    }
+
+    return;
+}
+
+void handle_conn(int client_fd, std::atomic<int>& counter)
+{
+    counter++;
+    handle_sock(client_fd);
+    counter--;
 }
 
 void handle_sock(int client_fd)
@@ -118,7 +150,7 @@ void handle_sock(int client_fd)
             }
         }
 
-        // construct compact array, 
+        // construct compact array,
         uint32_t comp_arr_len = 7 * api_versions_apis_count + (api_versions_apis_count - 1);
         char *comp_arr = (char *)calloc(comp_arr_len, sizeof(char));
         comp_arr[0] = api_versions_apis_count + 1;
